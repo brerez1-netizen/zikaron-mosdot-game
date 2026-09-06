@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#141d24">
+<title>מי יושב שם</title>
+<style>
+  :root{
+    --bg:#141d24; --panel:#1c2831; --panel2:#24333e; --line:#33444f;
+    --txt:#eef3f0; --dim:#8fa3a0; --accent:#b6e34a; --green:#4ade80; --bad:#e5675d;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:var(--bg);color:var(--txt);min-height:100vh;
+       font-family:"Segoe UI",Arial,sans-serif;display:flex;flex-direction:column}
+  .wrap{flex:1;display:flex;flex-direction:column;padding:16px;gap:14px}
+  h1{font-size:26px;color:var(--accent);text-align:center}
+  .sub{font-size:15px;color:var(--dim);text-align:center;margin-top:-6px}
+
+  label{font-size:15px;color:var(--dim);display:block;margin-bottom:6px}
+  input[type=text]{width:100%;padding:14px;font-size:19px;font-family:inherit;border-radius:10px;
+                   border:1px solid var(--line);background:var(--panel);color:var(--txt)}
+  .colors{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+  .sw{aspect-ratio:1;border-radius:10px;border:3px solid transparent;cursor:pointer;position:relative}
+  .sw.sel{border-color:#fff;transform:scale(1.06)}
+  .sw.taken{opacity:.22;cursor:not-allowed}
+  .sw.taken::after{content:"";position:absolute;inset:38% 12%;border-top:3px solid #000;transform:rotate(-20deg)}
+
+  button{font-family:inherit;font-size:19px;font-weight:700;padding:16px;border:none;
+         border-radius:12px;background:var(--accent);color:#1b2408;width:100%;cursor:pointer}
+  button:disabled{opacity:.45}
+
+  .status{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--panel);
+          border-bottom:1px solid var(--line)}
+  .me{padding:5px 13px;border-radius:16px;font-size:15px;font-weight:700;color:#0d1420}
+  .score{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;margin-inline-start:auto}
+  .clock{font-size:22px;font-weight:700;min-width:44px;text-align:center;
+         font-variant-numeric:tabular-nums}
+  .clock.low{color:var(--bad)}
+
+  .banner{text-align:center;font-size:18px;font-weight:700;padding:4px 0}
+  .banner.mine{color:var(--accent)}
+  .banner.other{color:var(--dim)}
+
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex:1;align-content:start}
+  .c{aspect-ratio:1;border-radius:12px;border:2px solid var(--line);background:var(--panel);
+     display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;
+     color:var(--txt);font-family:inherit}
+  .c.sel{border-color:var(--accent);background:rgba(182,227,74,.18)}
+  .c.gone{opacity:.2;border-style:dashed}
+  .c:disabled{color:var(--dim)}
+
+  .big{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+       gap:14px;text-align:center;padding:20px}
+  .big .ic{font-size:64px}
+  .big .t{font-size:26px;font-weight:700}
+  .big .d{font-size:17px;color:var(--dim);line-height:1.5}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- ===================== הצטרפות ===================== -->
+<div class="wrap" id="join">
+  <h1>מי יושב שם</h1>
+  <div class="sub">תחיקת הבנייה · שיעור 4</div>
+  <div>
+    <label for="nm">השם שלך</label>
+    <input type="text" id="nm" maxlength="14" autocomplete="off" placeholder="איך שיופיע על הלוח">
+  </div>
+  <div>
+    <label>הצבע שלך</label>
+    <div class="colors" id="colors"></div>
+  </div>
+  <button id="btnJoin">מצטרף</button>
+  <div class="sub" id="joinmsg"></div>
+</div>
+
+<!-- ===================== משחק ===================== -->
+<div id="game" class="hidden" style="flex:1;display:flex;flex-direction:column">
+  <div class="status">
+    <span class="me" id="me"></span>
+    <span class="clock" id="clock"></span>
+    <span class="score" id="score">0</span>
+  </div>
+  <div class="wrap" id="stage"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script>
+/* =====================================================================
+   השלט. הוא לא טוען את gameData ולא יודע איזה קלף שייך לאיזה זוג: הוא
+   מציג רשת של מספרים, מסמן מה כבר נתפס, ושולח את הבחירה. כל הטקסט של
+   הקלפים נמצא על המסך הגדול בלבד, ושם גם מסתכלים.
+   ===================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyBTGsY27ie1FHAmBmtYVAjP3u5TyHMh-UA",
+  databaseURL: "https://erez-zikaron-mosdot-game-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "erez-zikaron-mosdot-game",
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+const PALETTE = [
+  "#b6e34a","#e5675d","#4ade80","#4c9aff","#c05cf0","#ff9f45",
+  "#00c2c7","#f25f9c","#8bc34a","#ffd166","#7a6bff","#a1e3ff",
+];
+const LS = "zikaronMosdot.pid";
+
+let pid = null, me = null, cur = { state: "lobby" }, players = {}, tick = null;
+let takenColors = [];
+const $ = (id) => document.getElementById(id);
+
+/* ---------------------- בחירת צבע ---------------------- */
+let color = PALETTE[0];
+function paintColors() {
+  $("colors").innerHTML = PALETTE.map((c) => {
+    const t = takenColors.includes(c) && c !== color;
+    return `<div class="sw ${c === color ? "sel" : ""} ${t ? "taken" : ""}" data-c="${c}" style="background:${c}"></div>`;
+  }).join("");
+}
+$("colors").onclick = (e) => {
+  const sw = e.target.closest(".sw");
+  if (!sw || sw.classList.contains("taken")) return;
+  color = sw.dataset.c;
+  paintColors();
+};
+paintColors();
+
+db.ref("players").on("value", (s) => {
+  players = s.val() || {};
+  takenColors = Object.values(players).map((p) => p.color);
+  if (!pid) {
+    if (takenColors.includes(color)) color = PALETTE.find((c) => !takenColors.includes(c)) || color;
+    paintColors();
+  }
+  if (pid && players[pid]) { me = players[pid]; paintMe(); render(); }
+  if (pid && !players[pid]) { localStorage.removeItem(LS); location.reload(); }
+});
+
+/* ---------------------- הצטרפות ---------------------- */
+$("btnJoin").onclick = () => {
+  const name = $("nm").value.trim();
+  if (name.length < 2) { $("joinmsg").textContent = "צריך שם באורך שתי אותיות לפחות"; return; }
+  if (takenColors.includes(color)) { $("joinmsg").textContent = "הצבע הזה כבר נתפס, תבחר אחר"; return; }
+  $("btnJoin").disabled = true;
+  const ref = db.ref("players").push();
+  pid = ref.key;
+  ref.set({ name, color, score: 0, tries: 0, streak: 0, best: 0, joinedAt: firebase.database.ServerValue.TIMESTAMP })
+    .then(() => { localStorage.setItem(LS, pid); enterGame(); })
+    .catch(() => { $("btnJoin").disabled = false; $("joinmsg").textContent = "ההצטרפות נכשלה, נסה שוב"; });
+};
+
+(function restore() {
+  const saved = localStorage.getItem(LS);
+  if (!saved) return;
+  db.ref("players/" + saved).once("value").then((s) => {
+    if (!s.exists()) { localStorage.removeItem(LS); return; }
+    pid = saved; me = s.val(); color = me.color; enterGame();
+  });
+})();
+
+function enterGame() {
+  $("join").classList.add("hidden");
+  $("game").classList.remove("hidden");
+  paintMe();
+  render();
+}
+function paintMe() {
+  if (!me) return;
+  $("me").textContent = me.name;
+  $("me").style.background = me.color;
+  $("score").textContent = me.score || 0;
+}
+
+/* ---------------------- מצב המשחק ---------------------- */
+db.ref("game").on("value", (s) => { cur = s.val() || { state: "lobby" }; render(); });
+
+/** אותו חישוב סדר תורות כמו במסך המרצה, לפי סדר ההצטרפות. */
+function turnPid() {
+  const o = Object.entries(players)
+    .sort((a, b) => (a[1].joinedAt || 0) - (b[1].joinedAt || 0))
+    .map(([k]) => k);
+  return o.length ? o[(cur.turnIdx || 0) % o.length] : null;
+}
+
+function render() {
+  if (!pid) return;
+  const st = cur.state || "lobby";
+
+  if (st === "lobby") {
+    stopClock();
+    $("stage").innerHTML = `<div class="big"><div class="ic">⏳</div>
+      <div class="t">אתה בפנים</div>
+      <div class="d">מחכים שכולם יצטרפו. הלוח יעלה על המסך בעוד רגע.</div></div>`;
+    return;
+  }
+  if (st === "finished") {
+    stopClock();
+    $("stage").innerHTML = `<div class="big"><div class="ic">🏁</div>
+      <div class="t">סיימנו</div>
+      <div class="d">אספת ${(me && me.score) === 1 ? "<b>זוג אחד</b>" : `<b>${me ? me.score || 0 : 0}</b> זוגות`}.<br>התוצאות והתארים על המסך הגדול.</div></div>`;
+    return;
+  }
+  if (st === "boardDone") {
+    stopClock();
+    $("stage").innerHTML = `<div class="big"><div class="ic">✅</div>
+      <div class="t">הלוח נגמר</div>
+      <div class="d">מחכים שהמרצה יפתח את הלוח הבא.</div></div>`;
+    return;
+  }
+
+  const mine = turnPid() === pid;
+  const flip = cur.flip || [];
+  const cards = cur.cards || [];
+  const locked = !mine || flip.length >= 2 || !!cur.reveal;
+
+  const other = players[turnPid()];
+  const banner = cur.reveal
+    ? `<div class="banner other">ההסבר על המסך הגדול</div>`
+    : mine
+      ? `<div class="banner mine">התור שלך. תבחר שני קלפים.</div>`
+      : `<div class="banner other">התור של ${esc(other ? other.name : "")}</div>`;
+
+  $("stage").innerHTML = banner + `<div class="grid">` + cards.map((c, i) => {
+    if (c.t) return `<button class="c gone" disabled>${i + 1}</button>`;
+    const sel = flip.includes(i);
+    return `<button class="c ${sel ? "sel" : ""}" data-i="${i}" ${locked || sel ? "disabled" : ""}>${i + 1}</button>`;
+  }).join("") + `</div>`;
+
+  $("stage").querySelectorAll(".c[data-i]").forEach((b) => {
+    b.onclick = () => pick(parseInt(b.dataset.i, 10), b);
+  });
+
+  if (mine && !cur.reveal) startClock(); else stopClock();
+}
+
+function pick(i, btn) {
+  if (turnPid() !== pid) return;
+  btn.classList.add("sel");
+  $("stage").querySelectorAll(".c[data-i]").forEach((b) => { b.disabled = true; });
+  if (navigator.vibrate) navigator.vibrate(25);
+  db.ref("game/pick").set({ pid, i, at: firebase.database.ServerValue.TIMESTAMP });
+}
+
+/* ---------------------- שעון ---------------------- */
+function startClock() {
+  stopClock();
+  tick = setInterval(() => {
+    const left = Math.max(0, Math.ceil(((cur.turnEndsAt || 0) - Date.now()) / 1000));
+    $("clock").textContent = left;
+    $("clock").classList.toggle("low", left <= 5);
+    if (left <= 0) stopClock();
+  }, 250);
+}
+function stopClock() { if (tick) { clearInterval(tick); tick = null; } $("clock").textContent = ""; }
+
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+</script>
+</body>
+</html>

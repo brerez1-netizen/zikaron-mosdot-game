@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#141d24">
+<title>מי יושב שם · תרגול עצמי</title>
+<style>
+  :root{
+    --bg:#141d24; --panel:#1c2831; --panel2:#24333e; --line:#33444f;
+    --txt:#eef3f0; --dim:#8fa3a0; --accent:#b6e34a; --green:#4ade80; --bad:#e5675d;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:var(--bg);color:var(--txt);min-height:100vh;
+       font-family:"Segoe UI",Arial,sans-serif;display:flex;flex-direction:column}
+  .wrap{flex:1;display:flex;flex-direction:column;padding:14px;gap:12px;
+        max-width:760px;width:100%;margin:0 auto}
+
+  .top{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--panel);
+       border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  .top .where{font-size:14px;color:var(--dim)}
+  .top .chip{background:var(--panel2);border:1px solid var(--line);border-radius:14px;
+             padding:3px 11px;font-size:13px}
+  .top .sp{flex:1}
+  .top .v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+  .c{aspect-ratio:3/4;border-radius:11px;border:2px solid var(--line);background:var(--panel);
+     display:flex;align-items:center;justify-content:center;padding:8px;text-align:center;
+     font-size:13px;line-height:1.3;font-weight:600;color:var(--txt);font-family:inherit;
+     cursor:pointer;overflow:hidden}
+  .c.down{background:linear-gradient(150deg,#1d2b34,#16212a);font-size:22px;color:#3d5560}
+  .c.up{border-color:var(--accent);background:var(--panel2)}
+  .c.miss{border-color:var(--bad)}
+  .c.gone{opacity:.5;border-style:dashed;border-color:var(--green)}
+  @media (min-width:560px){ .c{font-size:15px} }
+
+  .rev{background:var(--panel);border-inline-start:4px solid var(--accent);border-radius:12px;
+       overflow:hidden}
+  .rev img{width:100%;display:block;max-height:38vh;object-fit:cover}
+  .rev .tx{padding:13px 15px}
+  .rev .pl{font-size:18px;font-weight:700;line-height:1.4}
+  .rev .pl .plus{color:var(--accent)}
+  .rev .info{font-size:15px;line-height:1.65;color:#cfdad6;margin-top:9px}
+
+  button.go{font-family:inherit;font-size:17px;font-weight:700;padding:14px;border:none;
+            border-radius:11px;background:var(--accent);color:#1b2408;width:100%;cursor:pointer}
+  button.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+
+  .hero{flex:1;display:flex;flex-direction:column;justify-content:center;gap:15px;text-align:center}
+  .hero h1{font-size:29px;color:var(--accent)}
+  .hero p{font-size:16px;line-height:1.6;color:var(--dim)}
+  .rules{background:var(--panel);border-radius:12px;padding:14px 16px;text-align:start;
+         font-size:15px;line-height:1.75;color:#cfdad6}
+  .rows{display:flex;flex-direction:column;gap:8px}
+  .row{display:flex;align-items:center;gap:10px;background:var(--panel);border-radius:10px;
+       padding:11px 14px;font-size:16px}
+  .row .lbl{flex:1;text-align:start}
+  .row .v{font-weight:700;font-variant-numeric:tabular-nums}
+  .row .done{color:var(--green);font-size:14px}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="top hidden" id="top">
+  <span class="where" id="where"></span>
+  <span class="chip" id="left"></span>
+  <span class="sp"></span>
+  <span class="v" id="moves">0</span>
+  <span class="where">תורות</span>
+  <span class="v" id="time">0:00</span>
+</div>
+
+<div class="wrap" id="wrap"></div>
+
+<script src="js/gameData.js"></script>
+<script>
+/* =====================================================================
+   גרסת התרגול האישית. אין Firebase ואין תורות: פותחים שני קלפים, וזוג
+   שמתאים נשאר פתוח עם ההסבר. המדד הוא כמה תורות לקח לנקות את הלוח.
+   ההתקדמות בין הלוחות שורדת רענון של הדף.
+   ===================================================================== */
+const G = window.gameData;
+const LS = "zikaronMosdot.solo";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+let done = load();      // { "<key>": {moves, seconds} }
+let bi = -1;            // הלוח הפעיל
+let slots = [];         // [{pair, side, gone}]
+let flip = [];
+let moves = 0;
+let t0 = 0;
+let timer = null;
+let busy = false;
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(LS) || "{}") || {}; } catch (e) { return {}; }
+}
+function save() { localStorage.setItem(LS, JSON.stringify(done)); }
+
+/* ---------------------- מסך הפתיחה ---------------------- */
+function menu() {
+  bi = -1;
+  stopTimer();
+  $("top").classList.add("hidden");
+  const rows = G.boards.map((b, i) => {
+    const d = done[b.key];
+    return `<div class="row">
+      <span class="lbl">${esc(b.name)}<br><span style="font-size:13px;color:var(--dim)">${esc(b.blurb)}</span></span>
+      ${d ? `<span class="done">${d.moves} תורות · ${fmt(d.seconds)}</span>` : ""}
+      <button class="go ghost" style="width:auto;padding:9px 15px" data-b="${i}">${d ? "שוב" : "התחלה"}</button>
+    </div>`;
+  }).join("");
+  $("wrap").innerHTML = `<div class="hero">
+      <h1>${esc(G.title)}</h1>
+      <p>${esc(G.subtitle)}</p>
+      <div class="rules">
+        שלושה לוחות, שמונה זוגות בכל אחד. בכל זוג קלף אחד הוא המוסד או הכלל,
+        והשני העובדה שמזהה אותו.<br>
+        פותחים שני קלפים. התאימו, הם נשארים פתוחים ועולה ההסבר. לא התאימו,
+        הם מתהפכים חזרה.<br>
+        המדד הוא כמה תורות לקח לנקות את הלוח. שישה עשר זה מושלם.
+      </div>
+      <div class="rows">${rows}</div>
+    </div>`;
+  $("wrap").querySelectorAll("button[data-b]").forEach((b) => {
+    b.onclick = () => start(parseInt(b.dataset.b, 10));
+  });
+}
+
+/* ---------------------- לוח ---------------------- */
+function start(i) {
+  bi = i;
+  slots = [];
+  G.boards[i].pairs.forEach((_, p) => { slots.push({ pair: p, side: 0 }); slots.push({ pair: p, side: 1 }); });
+  for (let k = slots.length - 1; k > 0; k--) {
+    const j = Math.floor(Math.random() * (k + 1));
+    [slots[k], slots[j]] = [slots[j], slots[k]];
+  }
+  flip = []; moves = 0; busy = false;
+  t0 = Date.now();
+  startTimer();
+  $("top").classList.remove("hidden");
+  draw();
+}
+
+function draw(reveal) {
+  const b = G.boards[bi];
+  $("where").textContent = b.name;
+  const left = slots.filter((s) => !s.gone).length / 2;
+  $("left").textContent = left ? (left === 1 ? "נותר זוג אחד" : `נותרו ${left} זוגות`) : "נוקה";
+  $("moves").textContent = moves;
+
+  const miss = flip.length === 2 && slots[flip[0]].pair !== slots[flip[1]].pair;
+  const grid = `<div class="grid">` + slots.map((s, i) => {
+    const pair = b.pairs[s.pair];
+    const txt = s.side === 0 ? pair.a : pair.b;
+    if (s.gone) return `<button class="c gone" disabled>${esc(txt)}</button>`;
+    if (flip.includes(i)) return `<button class="c up ${miss ? "miss" : ""}" disabled>${esc(txt)}</button>`;
+    return `<button class="c down" data-i="${i}" ${busy ? "disabled" : ""}>${i + 1}</button>`;
+  }).join("") + `</div>`;
+
+  // reveal != null ולא reveal: הזוג הראשון בלוח הוא אינדקס 0, והוא falsy
+  const revHtml = reveal != null ? (() => {
+    const pair = b.pairs[reveal];
+    return `<div class="rev">
+      <img src="${esc(pair.img)}" alt="">
+      <div class="tx">
+        <div class="pl">${esc(pair.a)}</div>
+        <div class="pl"><span class="plus">+</span> ${esc(pair.b)}</div>
+        <div class="info">${esc(pair.info)}</div>
+      </div></div>`;
+  })() : "";
+
+  $("wrap").innerHTML = grid + revHtml +
+    `<button class="go ghost" id="btnBack">חזרה לרשימת הלוחות</button>`;
+  $("btnBack").onclick = menu;
+  $("wrap").querySelectorAll(".c[data-i]").forEach((el) => {
+    el.onclick = () => pick(parseInt(el.dataset.i, 10));
+  });
+}
+
+function pick(i) {
+  if (busy || flip.includes(i) || slots[i].gone) return;
+  flip.push(i);
+  if (flip.length < 2) { draw(); return; }
+
+  busy = true;
+  moves++;
+  const [x, y] = flip;
+  const same = slots[x].pair === slots[y].pair;
+  draw();
+
+  if (same) {
+    const p = slots[x].pair;
+    setTimeout(() => {
+      slots[x].gone = true; slots[y].gone = true;
+      flip = []; busy = false;
+      draw(p);
+      if (slots.every((s) => s.gone)) finish();
+    }, 550);
+  } else {
+    setTimeout(() => { flip = []; busy = false; draw(); }, 1500);
+  }
+}
+
+function finish() {
+  stopTimer();
+  const secs = Math.round((Date.now() - t0) / 1000);
+  const key = G.boards[bi].key;
+  const prev = done[key];
+  const better = !prev || moves < prev.moves || (moves === prev.moves && secs < prev.seconds);
+  if (better) { done[key] = { moves, seconds: secs }; save(); }
+
+  const rest = G.boards.findIndex((b, i) => i !== bi && !done[b.key]);
+  setTimeout(() => {
+    $("wrap").insertAdjacentHTML("afterbegin", `<div class="rules" style="text-align:center">
+      <div style="font-size:22px;font-weight:700;color:var(--accent)">הלוח נוקה</div>
+      <div style="margin-top:6px">${moves} תורות · ${fmt(secs)}${better && prev ? " · שיא חדש" : ""}</div>
+      ${rest >= 0 ? `<button class="go" style="margin-top:12px" id="btnNext">ללוח "${esc(G.boards[rest].name)}"</button>` : ""}
+    </div>`);
+    if (rest >= 0) $("btnNext").onclick = () => start(rest);
+  }, 400);
+}
+
+/* ---------------------- שעון ---------------------- */
+function fmt(s) { return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+function startTimer() {
+  stopTimer();
+  timer = setInterval(() => { $("time").textContent = fmt(Math.round((Date.now() - t0) / 1000)); }, 500);
+}
+function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+
+menu();
+</script>
+</body>
+</html>

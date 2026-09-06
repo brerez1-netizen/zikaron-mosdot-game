@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" font-family="Segoe UI, Arial, sans-serif" direction="rtl">
+<defs>
+  <radialGradient id="g" cx="50%" cy="45%" r="65%">
+  <stop offset="0%" stop-color="#e5675d" stop-opacity=".20"/>
+  <stop offset="100%" stop-color="#e5675d" stop-opacity="0"/>
+  </radialGradient>
+  <filter id="blur"><feGaussianBlur stdDeviation="9"/></filter>
+</defs>
+<rect width="800" height="600" fill="#141d24"/>
+<rect width="800" height="600" fill="url(#g)"/><text x="400" y="62" fill="#eef3f0" font-size="34" font-weight="700" text-anchor="middle">ניגוד עניינים תדיר</text><rect x="196" y="196" width="408" height="150" rx="14" fill="none" stroke="#8fa3a0" stroke-width="3" stroke-dasharray="8 7"/>
+  <text x="400" y="272" fill="#8fa3a0" font-size="32" text-anchor="middle">כיסא חבר מוסד תכנון</text>
+  <text x="400" y="314" fill="#8fa3a0" font-size="24" text-anchor="middle">נשאר ריק</text>
+  <line x1="230" y1="352" x2="570" y2="228" stroke="#e5675d" stroke-width="5"/>
+  <text x="400" y="430" fill="#eef3f0" font-size="28" font-weight="700" text-anchor="middle">לא יתחיל לכהן, ואם כיהן - יחדל</text><text x="400" y="562" fill="#e5675d" font-size="24" text-anchor="middle">זו פסילה מהתפקיד, לא הימנעות מדיון אחד</text></svg>
